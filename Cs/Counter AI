@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ОНЛАЙН АРЕНА: ГОНКА ВООРУЖЕНИЙ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060913;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      touch-action: none;
+    }
+
+    #app-shell {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #0f172a 0%, #060913 85%);
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .arcade-btn {
+      transition: transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      box-shadow: 0 4px 0 rgba(15, 23, 42, 0.9), 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .arcade-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.9), 0 3px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    @keyframes tierPop {
+      0% { transform: translate(-50%, 10px) scale(0.85); opacity: 0; }
+      16% { transform: translate(-50%, 0px) scale(1.04); opacity: 1; }
+      84% { transform: translate(-50%, 0px) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -8px) scale(0.96); opacity: 0; }
+    }
+
+    .tier-banner-anim {
+      animation: tierPop 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .joystick-base {
+      position: absolute;
+      width: 122px;
+      height: 122px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 2px solid rgba(148, 163, 184, 0.28);
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      z-index: 25;
+    }
+
+    .joystick-knob {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 35% 30%, #38bdf8, #0284c7);
+      border: 2px solid rgba(224, 242, 254, 0.75);
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.55);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      z-index: 26;
+    }
+
+    .joystick-knob.aim-knob {
+      background: radial-gradient(circle at 35% 30%, #fb7185, #e11d48);
+      border-color: rgba(255, 228, 230, 0.8);
+      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.55);
+    }
+
+    /* Allow typing in inputs */
+    input {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-shell">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Верхний HUD во время боя -->
+    <header id="hud-top" class="hidden pointer-events-none absolute top-0 left-0 right-0 z-30 p-2.5 sm:p-4 flex items-start justify-between gap-2">
+      <!-- Левый блок: Здоровье, Серия, Комната и Онлайн -->
+      <div class="flex flex-col gap-1.5 min-w-[145px] sm:min-w-[205px]">
+        <div class="bg-slate-900/85 backdrop-blur-md border border-slate-700/70 rounded-xl px-3 py-2 shadow-lg">
+          <div class="flex items-center justify-between text-[11px] font-bold tracking-wider uppercase text-slate-300 mb-1">
+            <span>БРОНЯ</span>
+            <span id="hud-hp-text" class="text-emerald-400">100</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-150" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+          <button id="btn-copy-room" type="button" title="Скопировать код комнаты" class="arcade-btn bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-extrabold text-cyan-300 flex items-center gap-1.5 cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>КОМНАТА: <span id="hud-room-code" class="text-white">ARENA-1</span></span>
+          </button>
+
+          <div class="bg-slate-900/85 border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-300">
+            ОНЛАЙН: <span id="hud-online-count" class="text-emerald-400 font-black">1</span>
+          </div>
+
+          <div id="hud-streak" class="hidden bg-rose-500/20 border border-rose-400/50 rounded-lg px-2 py-1 text-[11px] font-black text-rose-300">
+            СЕРИЯ x<span id="hud-streak-val">2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Центр: Текущий ранг оружия (Гонка вооружений) -->
+      <div class="flex flex-col items-center bg-slate-900/90 backdrop-blur-md border border-cyan-500/40 rounded-2xl px-3.5 py-2 shadow-xl max-w-[200px] sm:max-w-[260px] w-full">
+        <div class="flex items-center justify-between w-full gap-1 text-[10px] sm:text-xs font-extrabold uppercase tracking-wider">
+          <span class="text-cyan-400">РАНГ <span id="hud-tier-num">1</span>/<span id="hud-tier-max">8</span></span>
+          <span id="hud-weapon-name" class="text-white truncate">ПИСТОЛЕТ</span>
+        </div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1.5">
+          <div id="hud-tier-bar" class="h-full bg-gradient-to-r from-cyan-400 via-sky-400 to-amber-400 rounded-full transition-all duration-150" style="width: 12.5%;"></div>
+        </div>
+        <div id="hud-tier-hint" class="text-[10px] text-slate-400 mt-1 font-semibold truncate max-w-full">
+          Убейте врага для след. оружия
+        </div>
+      </div>
+
+      <!-- Правый блок: Кнопки управления, Таблица лидеров и Килл-фид -->
+      <div class="flex flex-col items-end gap-1.5">
+        <div class="flex items-center gap-1.5 pointer-events-auto">
+          <button id="btn-autofire" type="button" title="Авто-огонь (ПК)" class="arcade-btn px-2.5 h-9 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 text-[11px] font-extrabold text-slate-300 cursor-pointer">
+            АВТО: <span id="autofire-label" class="text-slate-400">ВЫКЛ</span>
+          </button>
+
+          <button id="btn-mute" type="button" aria-label="Звук" class="arcade-btn w-9 h-9 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 flex items-center justify-center text-slate-200 cursor-pointer">
+            <svg id="icon-sound-on" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+            </svg>
+            <svg id="icon-sound-off" class="w-4 h-4 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M23 9l-6 6M17 9l6 6" />
+            </svg>
+          </button>
+
+          <button id="btn-leave" type="button" title="Выйти в лобби" class="arcade-btn w-9 h-9 rounded-xl bg-slate-800/90 hover:bg-rose-900/80 border border-slate-600/70 flex items-center justify-center text-slate-200 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Мини-таблица лидеров -->
+        <div class="hidden sm:block bg-slate-900/80 backdrop-blur-md border border-slate-700/70 rounded-xl p-2.5 w-52 shadow-lg">
+          <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex justify-between">
+            <span>ЛИДЕРЫ АРЕНЫ</span>
+            <span>РАНГ</span>
+          </div>
+          <div id="leaderboard-list" class="flex flex-col gap-1 text-xs"></div>
+        </div>
+
+        <!-- Килл-фид (лента убийств) -->
+        <div id="killfeed-list" class="flex flex-col items-end gap-1 mt-0.5 max-w-[240px]"></div>
+      </div>
+    </header>
+
+    <!-- Тост-уведомление (копирование кода, новое оружие, серия) -->
+    <div id="toast-banner" class="hidden pointer-events-none fixed top-24 left-1/2 z-40 bg-gradient-to-r from-cyan-600/95 via-sky-600/95 to-indigo-600/95 border border-cyan-300/60 text-white px-4 py-2 rounded-2xl shadow-2xl text-center whitespace-nowrap">
+      <div id="toast-subtitle" class="text-[10px] font-black uppercase tracking-widest text-cyan-100">НОВОЕ ОРУЖИЕ</div>
+      <div id="toast-title" class="text-sm sm:text-base font-extrabold tracking-wide">ПП-19 ВИТЯЗЬ</div>
+    </div>
+
+    <!-- Подсказки для сенсорного экрана -->
+    <div id="touch-hints" class="hidden pointer-events-none fixed bottom-4 left-0 right-0 z-20 px-4 flex items-end justify-between text-[11px] font-semibold text-slate-400/85">
+      <div class="bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 backdrop-blur-sm">
+        Левый палец: <span class="text-sky-300 font-bold">ДВИЖЕНИЕ</span>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 backdrop-blur-sm text-right">
+        Правый палец: <span class="text-rose-300 font-bold">ПРИЦЕЛ И ОГОНЬ</span>
+      </div>
+    </div>
+
+    <!-- Виртуальные джойстики -->
+    <div id="move-stick-base" class="joystick-base hidden"></div>
+    <div id="move-stick-knob" class="joystick-knob hidden"></div>
+    <div id="aim-stick-base" class="joystick-base hidden"></div>
+    <div id="aim-stick-knob" class="joystick-knob aim-knob hidden"></div>
+
+    <!-- Стартовый экран / Лобби -->
+    <section id="lobby-screen" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+      <div class="w-full max-w-lg bg-slate-900/95 border border-slate-700/80 rounded-3xl p-5 sm:p-7 shadow-2xl my-auto">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span id="network-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            ПОДКЛЮЧЕНИЕ К СЕТИ...
+          </span>
+          <span class="text-xs font-bold text-amber-400">
+            ПОБЕД: <span id="lobby-wins">0</span>
+          </span>
+        </div>
+
+        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
+          ОНЛАЙН АРЕНА: <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-400 to-amber-400">ГОНКА ВООРУЖЕНИЙ</span>
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-300 mt-1.5 leading-relaxed">
+          Сражайтесь с реальными игроками онлайн и умными ботами. Каждое убийство повышает ранг оружия от <strong class="text-white">Пистолета</strong> до <strong class="text-amber-300">Золотого Ножа</strong>!
+        </p>
+
+        <!-- Настройки игрока и комнаты -->
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="input-nickname" class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Ваш позывной</label>
+            <input id="input-nickname" type="text" maxlength="16" placeholder="Боец_77" class="w-full bg-slate-950/90 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white outline-none transition" />
+          </div>
+          <div>
+            <label for="input-room" class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Код комнаты (для друзей)</label>
+            <div class="flex gap-1.5">
+              <input id="input-room" type="text" maxlength="14" value="ARENA-1" placeholder="ARENA-1" class="w-full bg-slate-950/90 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-sm font-extrabold uppercase text-cyan-300 outline-none transition" />
+              <button id="btn-random-room" type="button" title="Случайная комната" class="arcade-btn px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs cursor-pointer">
+                🎲
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Лестница из 8 видов оружия -->
+        <div class="mt-4 bg-slate-950/80 border border-slate-800 rounded-2xl p-3">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Арсенал гонки вооружений (8 рангов)</div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] font-bold">
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200">1. Пистолет</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-sky-300">2. ПП-19</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-orange-300">3. Дробовик</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-emerald-300">4. Автомат АК</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-indigo-300">5. Снайперка</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-purple-300">6. Плазмоган</div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-rose-300">7. Ракетомет</div>
+            <div class="bg-amber-500/15 border border-amber-400/40 rounded-lg px-2 py-1 text-amber-300">8. Золотой Нож</div>
+          </div>
+        </div>
+
+        <!-- Управление -->
+        <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+          <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-2.5">
+            <span class="font-extrabold text-sky-300 block">Телефон / Планшет:</span>
+            Левый джойстик — бег, правый — прицел и стрельба.
+          </div>
+          <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-2.5">
+            <span class="font-extrabold text-rose-300 block">Компьютер (ПК):</span>
+            WASD / Стрелки — бег, Мышь — прицел и огонь.
+          </div>
+        </div>
+
+        <button id="btn-play" type="button" class="arcade-btn mt-5 w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-base tracking-wide uppercase cursor-pointer">
+          В БОЙ!
+        </button>
+      </div>
+    </section>
+
+    <!-- Экран победы в матче -->
+    <section id="victory-screen" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+      <div class="w-full max-w-md bg-slate-900/95 border border-amber-400/50 rounded-3xl p-6 text-center shadow-2xl">
+        <div class="inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-amber-400/20 text-amber-300 border border-amber-400/40 mb-2">
+          МАТЧ ЗАВЕРШЁН
+        </div>
+        <h2 id="victory-winner-name" class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          ПОБЕДИТЕЛЬ: БОЕЦ
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-300 mt-1">
+          Финальный удар <span class="text-amber-300 font-bold">Золотым Ножом</span> завершил гонку вооружений!
+        </p>
+
+        <div id="victory-scoreboard" class="mt-4 bg-slate-950/80 border border-slate-800 rounded-2xl p-3 text-left flex flex-col gap-1.5 max-h-48 overflow-y-auto"></div>
+
+        <div class="mt-5 flex flex-col sm:flex-row gap-2.5">
+          <button id="btn-rematch" type="button" class="arcade-btn flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm uppercase tracking-wider cursor-pointer">
+            Сыграть ещё раз
+          </button>
+          <button id="btn-victory-lobby" type="button" class="arcade-btn py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm uppercase tracking-wider border border-slate-700 cursor-pointer">
+            В лобби
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Firebase SDK + Основная логика игры -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      updateDoc,
+      deleteDoc,
+      onSnapshot,
+      collection,
+      addDoc,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. КОНФИГУРАЦИЯ ОРУЖИЯ (8 РАНГОВ ГОНКИ ВООРУЖЕНИЙ)
+    // =========================================================================
+    const WEAPONS = [
+      {
+        id: 0,
+        name: "ПИСТОЛЕТ",
+        color: "#cbd5e1",
+        fireRate: 0.24,
+        speed: 740,
+        damage: 28,
+        spread: 0.03,
+        pellets: 1,
+        radius: 5,
+        pierce: 0,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 1,
+        name: "ПП-19 ВИТЯЗЬ",
+        color: "#38bdf8",
+        fireRate: 0.11,
+        speed: 780,
+        damage: 18,
+        spread: 0.12,
+        pellets: 1,
+        radius: 4.5,
+        pierce: 0,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 2,
+        name: "ДРОБОВИК",
+        color: "#fb923c",
+        fireRate: 0.52,
+        speed: 650,
+        damage: 19,
+        spread: 0.36,
+        pellets: 6,
+        radius: 4.5,
+        pierce: 0,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 3,
+        name: "АВТОМАТ АК",
+        color: "#34d399",
+        fireRate: 0.145,
+        speed: 840,
+        damage: 26,
+        spread: 0.065,
+        pellets: 1,
+        radius: 5,
+        pierce: 0,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 4,
+        name: "СНАЙПЕРКА",
+        color: "#818cf8",
+        fireRate: 0.62,
+        speed: 1250,
+        damage: 88,
+        spread: 0.008,
+        pellets: 1,
+        radius: 5.5,
+        pierce: 2,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 5,
+        name: "ПЛАЗМОГАН",
+        color: "#c084fc",
+        fireRate: 0.18,
+        speed: 820,
+        damage: 34,
+        spread: 0.09,
+        pellets: 2,
+        radius: 6.5,
+        pierce: 1,
+        explosive: 0,
+        melee: false
+      },
+      {
+        id: 6,
+        name: "РАКЕТОМЕТ",
+        color: "#fb7185",
+        fireRate: 0.68,
+        speed: 620,
+        damage: 78,
+        spread: 0.03,
+        pellets: 1,
+        radius: 8,
+        pierce: 0,
+        explosive: 85,
+        melee: false
+      },
+      {
+        id: 7,
+        name: "ЗОЛОТОЙ НОЖ",
+        color: "#fbbf24",
+        fireRate: 0.28,
+        speed: 0,
+        damage: 135,
+        spread: 0,
+        pellets: 1,
+        radius: 46,
+        pierce: 0,
+        explosive: 0,
+        melee: true
+      }
+    ];
+
+    // =========================================================================
+    // 2. АРЕНА И УКРЫТИЯ (ФИКСИРОВАННЫЙ МИР 1600x1100 ДЛЯ ЧЕСТНОГО ОНЛАЙНА)
+    // =========================================================================
+    const WORLD_W = 1600;
+    const WORLD_H = 1100;
+
+    const OBSTACLES = [
+      // Центральный реакторный блок
+      { x: 740, y: 490, w: 120, h: 120, color: "#1e293b", accent: "#38bdf8" },
+      // Симметричные укрытия по углам и флангам
+      { x: 320, y: 240, w: 150, h: 44, color: "#1e293b", accent: "#64748b" },
+      { x: 320, y: 240, w: 44, h: 150, color: "#1e293b", accent: "#64748b" },
+
+      { x: 1130, y: 240, w: 150, h: 44, color: "#1e293b", accent: "#64748b" },
+      { x: 1236, y: 240, w: 44, h: 150, color: "#1e293b", accent: "#64748b" },
+
+      { x: 320, y: 816, w: 150, h: 44, color: "#1e293b", accent: "#64748b" },
+      { x: 320, y: 710, w: 44, h: 150, color: "#1e293b", accent: "#64748b" },
+
+      { x: 1130, y: 816, w: 150, h: 44, color: "#1e293b", accent: "#64748b" },
+      { x: 1236, y: 710, w: 44, h: 150, color: "#1e293b", accent: "#64748b" },
+
+      // Боковые баррикады
+      { x: 765, y: 170, w: 70, h: 110, color: "#1e293b", accent: "#475569" },
+      { x: 765, y: 820, w: 70, h: 110, color: "#1e293b", accent: "#475569" },
+      { x: 210, y: 515, w: 110, h: 70, color: "#1e293b", accent: "#475569" },
+      { x: 1280, y: 515, w: 110, h: 70, color: "#1e293b", accent: "#475569" }
+    ];
+
+    const SPAWN_POINTS = [
+      { x: 150, y: 150 },
+      { x: 1450, y: 150 },
+      { x: 150, y: 950 },
+      { x: 1450, y: 950 },
+      { x: 800, y: 100 },
+      { x: 800, y: 1000 },
+      { x: 120, y: 550 },
+      { x: 1480, y: 550 }
+    ];
+
+    const BOT_NAMES = [
+      "КиберВолк",
+      "Призрак_RU",
+      "Шторм_01",
+      "Вектор",
+      "Титан_Х",
+      "Кобра",
+      "Беркут",
+      "Фантом"
+    ];
+
+    // =========================================================================
+    // 3. ЗВУКОВОЙ ДВИЖОК (WEB AUDIO API)
+    // =========================================================================
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        try {
+          if (localStorage.getItem("arena_ru_muted") === "true") {
+            this.muted = true;
+          }
+        } catch (_) {}
+      }
+
+      ensure() {
+        if (this.muted) return null;
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === "suspended") {
+          this.ctx.resume().catch(() => {});
+        }
+        return this.ctx;
+      }
+
+      setMuted(val) {
+        this.muted = val;
+        try {
+          localStorage.setItem("arena_ru_muted", String(val));
+        } catch (_) {}
+      }
+
+      playWeapon(tier) {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        const presets = [
+          { type: "triangle", f1: 660, f2: 180, dur: 0.08, vol: 0.1 },
+          { type: "sawtooth", f1: 780, f2: 240, dur: 0.06, vol: 0.08 },
+          { type: "square", f1: 290, f2: 75, dur: 0.14, vol: 0.12 },
+          { type: "sawtooth", f1: 540, f2: 140, dur: 0.09, vol: 0.09 },
+          { type: "sawtooth", f1: 1350, f2: 120, dur: 0.19, vol: 0.14 },
+          { type: "sine", f1: 980, f2: 340, dur: 0.11, vol: 0.11 },
+          { type: "square", f1: 190, f2: 48, dur: 0.24, vol: 0.15 },
+          { type: "triangle", f1: 1120, f2: 420, dur: 0.09, vol: 0.12 }
+        ];
+
+        const p = presets[tier % presets.length];
+        osc.type = p.type;
+        osc.frequency.setValueAtTime(p.f1 * (0.95 + Math.random() * 0.1), now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(35, p.f2), now + p.dur);
+
+        gain.gain.setValueAtTime(p.vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + p.dur);
+      }
+
+      playHit(kill = false) {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = kill ? "sawtooth" : "triangle";
+        osc.frequency.setValueAtTime(kill ? 250 : 460, now);
+        osc.frequency.exponentialRampToValueAtTime(kill ? 55 : 180, now + (kill ? 0.18 : 0.05));
+
+        gain.gain.setValueAtTime(kill ? 0.14 : 0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (kill ? 0.18 : 0.05));
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + (kill ? 0.18 : 0.05));
+      }
+
+      playRankUp() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        [440, 554.37, 659.25, 880].forEach((freq, i) => {
+          const now = ctx.currentTime + i * 0.055;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.11, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        });
+      }
+
+      playHurt() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(52, now + 0.2);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // =========================================================================
+    // 4. DOM ЭЛЕМЕНТЫ И ЛОКАЛЬНЫЕ НАСТРОЙКИ
+    // =========================================================================
+    const canvas = document.getElementById("game-canvas");
+    const ctx = canvas.getContext("2d");
+
+    const ui = {
+      lobbyScreen: document.getElementById("lobby-screen"),
+      victoryScreen: document.getElementById("victory-screen"),
+      hudTop: document.getElementById("hud-top"),
+      networkBadge: document.getElementById("network-badge"),
+      lobbyWins: document.getElementById("lobby-wins"),
+      inputNickname: document.getElementById("input-nickname"),
+      inputRoom: document.getElementById("input-room"),
+      btnRandomRoom: document.getElementById("btn-random-room"),
+      btnPlay: document.getElementById("btn-play"),
+
+      hudHpText: document.getElementById("hud-hp-text"),
+      hudHpBar: document.getElementById("hud-hp-bar"),
+      hudRoomCode: document.getElementById("hud-room-code"),
+      hudOnlineCount: document.getElementById("hud-online-count"),
+      hudStreak: document.getElementById("hud-streak"),
+      hudStreakVal: document.getElementById("hud-streak-val"),
+      hudTierNum: document.getElementById("hud-tier-num"),
+      hudTierMax: document.getElementById("hud-tier-max"),
+      hudWeaponName: document.getElementById("hud-weapon-name"),
+      hudTierBar: document.getElementById("hud-tier-bar"),
+      hudTierHint: document.getElementById("hud-tier-hint"),
+      leaderboardList: document.getElementById("leaderboard-list"),
+      killfeedList: document.getElementById("killfeed-list"),
+
+      btnCopyRoom: document.getElementById("btn-copy-room"),
+      btnAutofire: document.getElementById("btn-autofire"),
+      autofireLabel: document.getElementById("autofire-label"),
+      btnMute: document.getElementById("btn-mute"),
+      iconSoundOn: document.getElementById("icon-sound-on"),
+      iconSoundOff: document.getElementById("icon-sound-off"),
+      btnLeave: document.getElementById("btn-leave"),
+
+      toastBanner: document.getElementById("toast-banner"),
+      toastSubtitle: document.getElementById("toast-subtitle"),
+      toastTitle: document.getElementById("toast-title"),
+      touchHints: document.getElementById("touch-hints"),
+
+      moveBase: document.getElementById("move-stick-base"),
+      moveKnob: document.getElementById("move-stick-knob"),
+      aimBase: document.getElementById("aim-stick-base"),
+      aimKnob: document.getElementById("aim-stick-knob"),
+
+      victoryWinnerName: document.getElementById("victory-winner-name"),
+      victoryScoreboard: document.getElementById("victory-scoreboard"),
+      btnRematch: document.getElementById("btn-rematch"),
+      btnVictoryLobby: document.getElementById("btn-victory-lobby")
+    };
+
+    function getSavedNick() {
+      try {
+        return localStorage.getItem("arena_ru_nick") || "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function saveNick(nick) {
+      try {
+        localStorage.setItem("arena_ru_nick", nick);
+      } catch (_) {}
+    }
+
+    function getSavedWins() {
+      try {
+        return parseInt(localStorage.getItem("arena_ru_wins") || "0", 10) || 0;
+      } catch (_) {
+        return 0;
+      }
+    }
+
+    function incrementWins() {
+      const next = getSavedWins() + 1;
+      try {
+        localStorage.setItem("arena_ru_wins", String(next));
+      } catch (_) {}
+      ui.lobbyWins.textContent = next;
+    }
+
+    ui.inputNickname.value = getSavedNick() || `Боец_${Math.floor(10 + Math.random() * 89)}`;
+    ui.lobbyWins.textContent = getSavedWins();
+
+    // =========================================================================
+    // 5. FIREBASE ИНИЦИАЛИЗАЦИЯ И ОНЛАЙН-СОСТОЯНИЕ
+    // =========================================================================
+    const appId = typeof __app_id !== "undefined" ? __app_id : "online-arena-arms-race";
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let firebaseReady = false;
+
+    async function initFirebase() {
+      try {
+        if (typeof __firebase_config === "undefined") {
+          throw new Error("No firebase config");
+        }
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          const cred = await signInWithCustomToken(auth, __initial_auth_token);
+          currentUser = cred.user;
+        } else {
+          const cred = await signInAnonymously(auth);
+          currentUser = cred.user;
+        }
+
+        firebaseReady = Boolean(currentUser && db);
+        if (firebaseReady) {
+          ui.networkBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> ОНЛАЙН-СЕРВЕР ГОТОВ`;
+          ui.networkBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-400/30";
+        }
+      } catch (err) {
+        firebaseReady = false;
+        ui.networkBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> ЛОКАЛЬНЫЙ РЕЖИМ С БОТАМИ`;
+        ui.networkBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-400/30";
+      }
+    }
+
+    initFirebase();
+
+    // =========================================================================
+    // 6. СОСТОЯНИЕ ИГРЫ И СУЩНОСТИ
+    // =========================================================================
+    const state = {
+      screen: "lobby", // 'lobby' | 'playing' | 'victory'
+      roomCode: "ARENA-1",
+      myId: "local-" + Math.random().toString(36).slice(2, 9),
+      myName: "Боец",
+      width: window.innerWidth,
+      height: window.innerHeight,
+      dpr: Math.min(window.devicePixelRatio || 1, 2),
+
+      me: {
+        x: 300,
+        y: 300,
+        radius: 18,
+        speed: 270,
+        hp: 100,
+        maxHp: 100,
+        angle: 0,
+        tier: 0,
+        kills: 0,
+        deaths: 0,
+        streak: 0,
+        fireCooldown: 0,
+        invuln: 0,
+        meleeSwing: 0
+      },
+
+      remotePlayers: new Map(), // id -> interpolated player object
+      bots: [], // local AI bots when online count < 4
+      bullets: [],
+      particles: [],
+      floatingTexts: [],
+      killfeed: [],
+
+      unsubPlayers: null,
+      unsubEvents: null,
+      syncTimer: 0,
+      processedEventIds: new Set(),
+      sessionStartMs: Date.now(),
+
+      autoFire: false,
+      hintsDismissed: false,
+      screenShake: 0,
+      lastTime: 0,
+
+      // Управление
+      moveTouchId: null,
+      moveOrigin: { x: 0, y: 0 },
+      moveVec: { x: 0, y: 0 },
+      aimTouchId: null,
+      aimOrigin: { x: 0, y: 0 },
+      aimActive: false,
+      keys: new Set(),
+      mouseDown: false,
+      mouseScreen: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }
+    };
+
+    // =========================================================================
+    // 7. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ КОЛЛИЗИЙ И СПАВНА
+    // =========================================================================
+    function circleRectCollide(cx, cy, cr, rect) {
+      const closestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+      const closestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+      const dx = cx - closestX;
+      const dy = cy - closestY;
+      return dx * dx + dy * dy < cr * cr;
+    }
+
+    function resolveCircleObstacles(entity) {
+      const r = entity.radius;
+      entity.x = Math.max(r + 12, Math.min(WORLD_W - r - 12, entity.x));
+      entity.y = Math.max(r + 12, Math.min(WORLD_H - r - 12, entity.y));
+
+      for (const obs of OBSTACLES) {
+        const closestX = Math.max(obs.x, Math.min(entity.x, obs.x + obs.w));
+        const closestY = Math.max(obs.y, Math.min(entity.y, obs.y + obs.h));
+        const dx = entity.x - closestX;
+        const dy = entity.y - closestY;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < r * r) {
+          const dist = Math.sqrt(distSq) || 0.001;
+          const overlap = r - dist;
+          entity.x += (dx / dist) * overlap;
+          entity.y += (dy / dist) * overlap;
+        }
+      }
+    }
+
+    function pickSafeSpawn() {
+      let best = SPAWN_POINTS[0];
+      let bestMinDist = -1;
+
+      for (const pt of SPAWN_POINTS) {
+        let minDist = 99999;
+        for (const rp of state.remotePlayers.values()) {
+          const d = Math.hypot(pt.x - rp.x, pt.y - rp.y);
+          if (d < minDist) minDist = d;
+        }
+        for (const bot of state.bots) {
+          const d = Math.hypot(pt.x - bot.x, pt.y - bot.y);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          best = pt;
+        }
+      }
+      return { x: best.x + (Math.random() - 0.5) * 40, y: best.y + (Math.random() - 0.5) * 40 };
+    }
+
+    function showToast(subtitle, title) {
+      ui.toastSubtitle.textContent = subtitle;
+      ui.toastTitle.textContent = title;
+      ui.toastBanner.classList.remove("hidden", "tier-banner-anim");
+      void ui.toastBanner.offsetWidth;
+      ui.toastBanner.classList.add("tier-banner-anim");
+    }
+
+    function addKillfeedMessage(killerName, victimName, weaponName, isGoldenKnife = false) {
+      state.killfeed.unshift({
+        killer: killerName,
+        victim: victimName,
+        weapon: weaponName,
+        gold: isGoldenKnife,
+        time: performance.now()
+      });
+      if (state.killfeed.length > 4) state.killfeed.pop();
+      renderKillfeed();
+    }
+
+    function renderKillfeed() {
+      ui.killfeedList.innerHTML = "";
+      for (const item of state.killfeed) {
+        const div = document.createElement("div");
+        div.className = `px-2.5 py-1 rounded-lg text-[11px] font-bold backdrop-blur-md border shadow ${
+          item.gold
+            ? "bg-amber-500/25 border-amber-400/60 text-amber-200"
+            : "bg-slate-900/80 border-slate-700/70 text-slate-200"
+        }`;
+        div.innerHTML = `<span class="text-cyan-300">${escapeHtml(item.killer)}</span> <span class="text-slate-400">[${escapeHtml(item.weapon)}]</span> <span class="text-rose-300">${escapeHtml(item.victim)}</span>`;
+        ui.killfeedList.appendChild(div);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    // =========================================================================
+    // 8. FIREBASE MULTIPLAYER SYNC (ИГРОКИ И СОБЫТИЯ МАТЧА)
+    // =========================================================================
+    function getRoomPlayersCol() {
+      return collection(db, "artifacts", appId, "public", "data", `arena_${state.roomCode}_players`);
+    }
+
+    function getRoomEventsCol() {
+      return collection(db, "artifacts", appId, "public", "data", `arena_${state.roomCode}_events`);
+    }
+
+    async function publishEvent(payload) {
+      if (!firebaseReady || !currentUser) return;
+      try {
+        await addDoc(getRoomEventsCol(), {
+          ...payload,
+          room: state.roomCode,
+          senderId: state.myId,
+          createdAt: Date.now()
+        });
+      } catch (_) {}
+    }
+
+    async function syncMyStateToCloud(force = false) {
+      if (!firebaseReady || !currentUser || state.screen !== "playing") return;
+      try {
+        const myDoc = doc(db, "artifacts", appId, "public", "data", `arena_${state.roomCode}_players`, state.myId);
+        await setDoc(
+          myDoc,
+          {
+            id: state.myId,
+            name: state.myName,
+            x: Math.round(state.me.x),
+            y: Math.round(state.me.y),
+            angle: Number(state.me.angle.toFixed(2)),
+            hp: Math.round(state.me.hp),
+            tier: state.me.tier,
+            kills: state.me.kills,
+            updatedAt: Date.now()
+          },
+          { merge: true }
+        );
+      } catch (_) {}
+    }
+
+    function subscribeToRoom() {
+      cleanupRoomSubscriptions();
+      if (!firebaseReady || !currentUser) return;
+
+      // 1. Подписка на игроков в комнате
+      state.unsubPlayers = onSnapshot(
+        getRoomPlayersCol(),
+        (snapshot) => {
+          const now = Date.now();
+          const activeIds = new Set();
+
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (!data || !data.id || data.id === state.myId) return;
+            // Игнорируем неактивных игроков (> 15 секунд без пинга)
+            if (now - (data.updatedAt || 0) > 15000) return;
+
+            activeIds.add(data.id);
+            const existing = state.remotePlayers.get(data.id);
+            if (existing) {
+              existing.targetX = data.x ?? existing.x;
+              existing.targetY = data.y ?? existing.y;
+              existing.targetAngle = data.angle ?? existing.angle;
+              existing.hp = data.hp ?? 100;
+              existing.tier = data.tier ?? 0;
+              existing.kills = data.kills ?? 0;
+              existing.name = data.name || "Игрок";
+              existing.updatedAt = data.updatedAt || now;
+            } else {
+              state.remotePlayers.set(data.id, {
+                id: data.id,
+                name: data.name || "Игрок",
+                x: data.x ?? 800,
+                y: data.y ?? 550,
+                targetX: data.x ?? 800,
+                targetY: data.y ?? 550,
+                angle: data.angle ?? 0,
+                targetAngle: data.angle ?? 0,
+                radius: 18,
+                hp: data.hp ?? 100,
+                maxHp: 100,
+                tier: data.tier ?? 0,
+                kills: data.kills ?? 0,
+                updatedAt: data.updatedAt || now,
+                hitFlash: 0
+              });
+              addKillfeedMessage("Система", `${data.name || "Игрок"} вошёл на арену`, "ОНЛАЙН");
+            }
+          });
+
+          for (const id of state.remotePlayers.keys()) {
+            if (!activeIds.has(id)) {
+              state.remotePlayers.delete(id);
+            }
+          }
+
+          rebalanceBots();
+          updateHUD();
+        },
+        (err) => {
+          console.warn("Ошибка синхронизации игроков:", err);
+        }
+      );
+
+      // 2. Подписка на события (выстрелы, попадания, убийства, победа)
+      state.unsubEvents = onSnapshot(
+        getRoomEventsCol(),
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type !== "added") return;
+            const id = change.doc.id;
+            if (state.processedEventIds.has(id)) return;
+            state.processedEventIds.add(id);
+
+            const ev = change.doc.data();
+            if (!ev || (ev.createdAt || 0) < state.sessionStartMs - 1500) return;
+
+            if (ev.type === "shoot" && ev.senderId !== state.myId) {
+              spawnWeaponProjectiles(
+                ev.x,
+                ev.y,
+                ev.angle,
+                ev.tier || 0,
+                ev.senderId,
+                ev.senderName || "Игрок",
+                false
+              );
+            } else if (ev.type === "hit" && ev.targetId === state.myId && state.screen === "playing") {
+              applyDamageToMe(ev.damage || 15, ev.senderId, ev.senderName || "Противник", ev.tier || 0);
+            } else if (ev.type === "kill") {
+              if (ev.senderId !== state.myId) {
+                addKillfeedMessage(ev.senderName || "Игрок", ev.victimName || "Цель", WEAPONS[ev.tier || 0].name, ev.tier === 7);
+              }
+            } else if (ev.type === "win" && state.screen === "playing") {
+              triggerMatchVictory(ev.winnerName || "Победитель");
+            }
+          });
+        },
+        (err) => {
+          console.warn("Ошибка событий комнаты:", err);
+        }
+      );
+    }
+
+    function cleanupRoomSubscriptions() {
+      if (state.unsubPlayers) {
+        state.unsubPlayers();
+        state.unsubPlayers = null;
+      }
+      if (state.unsubEvents) {
+        state.unsubEvents();
+        state.unsubEvents = null;
+      }
+    }
+
+    async function removeMyPlayerDoc() {
+      if (!firebaseReady || !currentUser) return;
+      try {
+        const myDoc = doc(db, "artifacts", appId, "public", "data", `arena_${state.roomCode}_players`, state.myId);
+        await deleteDoc(myDoc);
+      } catch (_) {}
+    }
+
+    // =========================================================================
+    // 9. УМНЫЕ ИИ-БОТЫ (АВТОЗАПОЛНЕНИЕ АРЕНЫ ДО 4 УЧАСТНИКОВ)
+    // =========================================================================
+    function rebalanceBots() {
+      const realPlayersCount = 1 + state.remotePlayers.size;
+      const desiredBots = Math.max(0, 4 - realPlayersCount);
+
+      while (state.bots.length > desiredBots) {
+        state.bots.pop();
+      }
+
+      while (state.bots.length < desiredBots) {
+        const sp = pickSafeSpawn();
+        const usedNames = new Set(state.bots.map((b) => b.name));
+        const availableName = BOT_NAMES.find((n) => !usedNames.has(n)) || `Бот_${state.bots.length + 1}`;
+        state.bots.push({
+          id: "bot-" + Math.random().toString(36).slice(2, 8),
+          name: availableName,
+          isBot: true,
+          x: sp.x,
+          y: sp.y,
+          radius: 18,
+          speed: 205 + Math.random() * 25,
+          hp: 100,
+          maxHp: 100,
+          angle: Math.random() * Math.PI * 2,
+          tier: 0,
+          kills: 0,
+          fireCooldown: 0.5 + Math.random() * 0.6,
+          strafeDir: Math.random() < 0.5 ? 1 : -1,
+          strafeTimer: 1 + Math.random() * 1.5,
+          hitFlash: 0,
+          meleeSwing: 0
+        });
+      }
+    }
+
+    function updateBots(dt) {
+      // Собираем всех потенциальных целей для ботов
+      const targets = [
+        {
+          id: state.myId,
+          name: state.myName,
+          x: state.me.x,
+          y: state.me.y,
+          hp: state.me.hp,
+          isMe: true
+        }
+      ];
+      for (const rp of state.remotePlayers.values()) {
+        if (rp.hp > 0) targets.push({ id: rp.id, name: rp.name, x: rp.x, y: rp.y, hp: rp.hp, isRemote: true });
+      }
+      for (const b of state.bots) {
+        if (b.hp > 0) targets.push({ id: b.id, name: b.name, x: b.x, y: b.y, hp: b.hp, isBot: true, ref: b });
+      }
+
+      for (const bot of state.bots) {
+        if (bot.hitFlash > 0) bot.hitFlash = Math.max(0, bot.hitFlash - dt);
+        if (bot.meleeSwing > 0) bot.meleeSwing = Math.max(0, bot.meleeSwing - dt);
+
+        // Поиск ближайшей цели
+        let nearest = null;
+        let minDist = 99999;
+        for (const t of targets) {
+          if (t.id === bot.id || t.hp <= 0) continue;
+          const d = Math.hypot(t.x - bot.x, t.y - bot.y);
+          if (d < minDist) {
+            minDist = d;
+            nearest = t;
+          }
+        }
+
+        if (!nearest) continue;
+
+        const dx = nearest.x - bot.x;
+        const dy = nearest.y - bot.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const desiredAngle = Math.atan2(dy, dx);
+        bot.angle = desiredAngle;
+
+        bot.strafeTimer -= dt;
+        if (bot.strafeTimer <= 0) {
+          bot.strafeDir *= -1;
+          bot.strafeTimer = 1.1 + Math.random() * 1.6;
+        }
+
+        const weapon = WEAPONS[bot.tier];
+        const preferredDist = weapon.melee ? 34 : weapon.id === 2 ? 190 : 320;
+
+        let moveX = 0;
+        let moveY = 0;
+        if (dist > preferredDist + 30) {
+          moveX += dx / dist;
+          moveY += dy / dist;
+        } else if (!weapon.melee && dist < preferredDist - 50) {
+          moveX -= dx / dist;
+          moveY -= dy / dist;
+        }
+
+        // Боковое маневрирование
+        moveX += (-dy / dist) * 0.65 * bot.strafeDir;
+        moveY += (dx / dist) * 0.65 * bot.strafeDir;
+
+        const mLen = Math.hypot(moveX, moveY) || 1;
+        bot.x += (moveX / mLen) * bot.speed * dt;
+        bot.y += (moveY / mLen) * bot.speed * dt;
+        resolveCircleObstacles(bot);
+
+        // Стрельба бота
+        bot.fireCooldown -= dt;
+        const maxShootRange = weapon.melee ? 56 : 620;
+        if (dist < maxShootRange && bot.fireCooldown <= 0) {
+          const aimJitter = (Math.random() - 0.5) * 0.16;
+          spawnWeaponProjectiles(bot.x, bot.y, bot.angle + aimJitter, bot.tier, bot.id, bot.name, true);
+          bot.fireCooldown = weapon.fireRate * (1.25 + Math.random() * 0.35);
+          if (weapon.melee) bot.meleeSwing = 0.22;
+        }
+      }
+    }
+
+    // =========================================================================
+    // 10. СТРЕЛЬБА, СНАРЯДЫ, УРОН И ПРОГРЕСС ГОНКИ ВООРУЖЕНИЙ
+    // =========================================================================
+    function spawnWeaponProjectiles(originX, originY, baseAngle, tierIdx, ownerId, ownerName, canDealDamage) {
+      const weapon = WEAPONS[tierIdx] || WEAPONS[0];
+
+      if (weapon.melee) {
+        // Удар Золотым Ножом в ближнем бою
+        const strikeX = originX + Math.cos(baseAngle) * 32;
+        const strikeY = originY + Math.sin(baseAngle) * 32;
+        spawnParticles(strikeX, strikeY, "#fbbf24", 12, 180);
+
+        if (canDealDamage) {
+          checkMeleeHit(strikeX, strikeY, weapon.radius, weapon.damage, ownerId, ownerName, tierIdx);
+        }
+        return;
+      }
+
+      const muzzle = 24;
+      const sx = originX + Math.cos(baseAngle) * muzzle;
+      const sy = originY + Math.sin(baseAngle) * muzzle;
+
+      for (let i = 0; i < weapon.pellets; i++) {
+        let offset = 0;
+        if (weapon.pellets > 1) {
+          const frac = i / (weapon.pellets - 1) - 0.5;
+          offset = frac * weapon.spread + (Math.random() - 0.5) * 0.04;
+        } else {
+          offset = (Math.random() - 0.5) * weapon.spread;
+        }
+
+        const ang = baseAngle + offset;
+        state.bullets.push({
+          x: sx,
+          y: sy,
+          vx: Math.cos(ang) * weapon.speed,
+          vy: Math.sin(ang) * weapon.speed,
+          radius: weapon.radius,
+          damage: weapon.damage,
+          color: weapon.color,
+          pierce: weapon.pierce,
+          explosive: weapon.explosive,
+          tier: tierIdx,
+          ownerId,
+          ownerName,
+          canDealDamage,
+          hitTargets: new Set(),
+          life: 1.4
+        });
+      }
+
+      spawnParticles(sx, sy, weapon.color, 4, 110);
+    }
+
+    function checkMeleeHit(cx, cy, radius, damage, attackerId, attackerName, tierIdx) {
+      // Проверка попадания по игроку (если атакует бот)
+      if (attackerId !== state.myId && Math.hypot(state.me.x - cx, state.me.y - cy) < radius + state.me.radius) {
+        applyDamageToMe(damage, attackerId, attackerName, tierIdx);
+      }
+
+      // Проверка попадания по удалённым игрокам (если атакуем мы)
+      if (attackerId === state.myId) {
+        for (const rp of state.remotePlayers.values()) {
+          if (Math.hypot(rp.x - cx, rp.y - cy) < radius + rp.radius) {
+            handleAttackerScoredHit(attackerId, attackerName, rp.id, rp.name, damage, tierIdx, rp);
+          }
+        }
+      }
+
+      // Проверка попадания по ботам
+      for (const bot of state.bots) {
+        if (bot.id === attackerId) continue;
+        if (Math.hypot(bot.x - cx, bot.y - cy) < radius + bot.radius) {
+          handleAttackerScoredHit(attackerId, attackerName, bot.id, bot.name, damage, tierIdx, bot);
+        }
+      }
+    }
+
+    function applyDamageToMe(damage, attackerId, attackerName, attackerTier) {
+      if (state.me.invuln > 0 || state.screen !== "playing") return;
+
+      state.me.hp = Math.max(0, state.me.hp - damage);
+      state.screenShake = Math.min(12, state.screenShake + 6);
+      sound.playHurt();
+      spawnParticles(state.me.x, state.me.y, "#fb7185", 12, 180);
+      spawnFloatingText(state.me.x, state.me.y - 24, `-${damage}`, "#fda4af");
+      updateHUD();
+
+      if (state.me.hp <= 0) {
+        state.me.deaths += 1;
+        state.me.streak = 0;
+
+        // Понижение ранга при смерти от Золотого Ножа или респавн
+        addKillfeedMessage(attackerName, state.myName, WEAPONS[attackerTier]?.name || "Оружие", attackerTier === 7);
+
+        // Респавн игрока
+        const sp = pickSafeSpawn();
+        state.me.x = sp.x;
+        state.me.y = sp.y;
+        state.me.hp = 100;
+        state.me.invuln = 1.6;
+        showToast("ВОЗРОЖДЕНИЕ", "Щиты восстановлены!");
+        syncMyStateToCloud(true);
+        updateHUD();
+      }
+    }
+
+    function handleAttackerScoredHit(attackerId, attackerName, targetId, targetName, damage, tierIdx, targetObj) {
+      targetObj.hitFlash = 0.09;
+      spawnFloatingText(targetObj.x, targetObj.y - 24, `-${damage}`, "#fde047");
+
+      // Если мы попали по удалённому онлайн-игроку — отправляем событие урона по сети
+      if (attackerId === state.myId && !targetObj.isBot) {
+        publishEvent({
+          type: "hit",
+          targetId,
+          senderName: state.myName,
+          damage,
+          tier: tierIdx
+        });
+      }
+
+      // Для ботов (или визуального прогноза) уменьшаем HP локально
+      if (targetObj.isBot) {
+        targetObj.hp -= damage;
+        if (targetObj.hp <= 0) {
+          sound.playHit(true);
+          spawnParticles(targetObj.x, targetObj.y, "#fb7185", 22, 230);
+
+          // Начисляем убийство атакующему (нам или другому боту)
+          if (attackerId === state.myId) {
+            onMyKillAchieved(targetObj.name, tierIdx);
+          } else {
+            const killerBot = state.bots.find((b) => b.id === attackerId);
+            if (killerBot) {
+              killerBot.kills += 1;
+              addKillfeedMessage(killerBot.name, targetObj.name, WEAPONS[tierIdx].name, tierIdx === 7);
+              if (tierIdx === 7) {
+                triggerMatchVictory(killerBot.name);
+                return;
+              }
+              killerBot.tier = Math.min(WEAPONS.length - 1, killerBot.tier + 1);
+            }
+          }
+
+          // Респавн бота
+          const sp = pickSafeSpawn();
+          targetObj.x = sp.x;
+          targetObj.y = sp.y;
+          targetObj.hp = 100;
+        } else if (attackerId === state.myId) {
+          sound.playHit(false);
+        }
+      } else if (attackerId === state.myId) {
+        // Локальный прогноз убийства удалённого игрока
+        targetObj.hp = Math.max(0, targetObj.hp - damage);
+        if (targetObj.hp <= 0) {
+          sound.playHit(true);
+          spawnParticles(targetObj.x, targetObj.y, "#38bdf8", 24, 240);
+          onMyKillAchieved(targetObj.name, tierIdx);
+          targetObj.hp = 100;
+        } else {
+          sound.playHit(false);
+        }
+      }
+    }
+
+    function onMyKillAchieved(victimName, usedTierIdx) {
+      state.me.kills += 1;
+      state.me.streak += 1;
+      state.me.hp = Math.min(100, state.me.hp + 25); // Бонус +25 брони за фраг
+
+      const usedWeapon = WEAPONS[usedTierIdx] || WEAPONS[state.me.tier];
+      const isGoldenFinish = usedTierIdx === WEAPONS.length - 1;
+
+      addKillfeedMessage(state.myName, victimName, usedWeapon.name, isGoldenFinish);
+      publishEvent({
+        type: "kill",
+        senderName: state.myName,
+        victimName,
+        tier: usedTierIdx
+      });
+
+      if (isGoldenFinish) {
+        incrementWins();
+        publishEvent({
+          type: "win",
+          winnerName: state.myName
+        });
+        triggerMatchVictory(state.myName);
+        return;
+      }
+
+      // Повышаем ранг оружия!
+      if (state.me.tier < WEAPONS.length - 1) {
+        state.me.tier += 1;
+        const nextW = WEAPONS[state.me.tier];
+        sound.playRankUp();
+        showToast(`РАНГ ${state.me.tier + 1} ИЗ ${WEAPONS.length}`, nextW.name);
+        spawnParticles(state.me.x, state.me.y, nextW.color, 24, 210);
+      }
+
+      syncMyStateToCloud(true);
+      updateHUD();
+    }
+
+    function triggerMatchVictory(winnerName) {
+      if (state.screen === "victory") return;
+      state.screen = "victory";
+      clearTouchControls();
+
+      ui.hudTop.classList.add("hidden");
+      ui.touchHints.classList.add("hidden");
+      ui.victoryScreen.classList.remove("hidden");
+      ui.victoryWinnerName.textContent = `ПОБЕДИТЕЛЬ: ${winnerName.toUpperCase()}`;
+
+      // Формируем итоговую таблицу
+      const participants = getAllParticipantsSorted();
+      ui.victoryScoreboard.innerHTML = "";
+      participants.forEach((p, idx) => {
+        const row = document.createElement("div");
+        row.className = `flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold ${
+          p.isMe ? "bg-cyan-500/20 border border-cyan-400/50 text-white" : "bg-slate-900 text-slate-300"
+        }`;
+        row.innerHTML = `
+          <div class="flex items-center gap-2 truncate">
+            <span class="text-amber-400 font-black">#${idx + 1}</span>
+            <span class="truncate">${escapeHtml(p.name)}</span>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-slate-400">Фраги: <strong class="text-white">${p.kills}</strong></span>
+            <span class="text-cyan-300">${WEAPONS[p.tier]?.name || "Пистолет"}</span>
+          </div>
+        `;
+        ui.victoryScoreboard.appendChild(row);
+      });
+    }
+
+    function triggerExplosion(x, y, radius, damage, ownerId, ownerName, tierIdx) {
+      spawnParticles(x, y, "#fb7185", 26, 260);
+      spawnParticles(x, y, "#fbbf24", 16, 180);
+      if (ownerId === state.myId) {
+        state.screenShake = Math.min(12, state.screenShake + 7);
+      }
+
+      if (ownerId !== state.myId && Math.hypot(state.me.x - x, state.me.y - y) < radius + state.me.radius) {
+        applyDamageToMe(Math.round(damage * 0.75), ownerId, ownerName, tierIdx);
+      }
+
+      if (ownerId === state.myId) {
+        for (const rp of state.remotePlayers.values()) {
+          if (Math.hypot(rp.x - x, rp.y - y) < radius + rp.radius) {
+            handleAttackerScoredHit(ownerId, ownerName, rp.id, rp.name, damage, tierIdx, rp);
+          }
+        }
+      }
+
+      for (const bot of state.bots) {
+        if (bot.id === ownerId) continue;
+        if (Math.hypot(bot.x - x, bot.y - y) < radius + bot.radius) {
+          handleAttackerScoredHit(ownerId, ownerName, bot.id, bot.name, damage, tierIdx, bot);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 11. ЧАСТИЦЫ, ВСПЛЫВАЮЩИЙ ТЕКСТ И HUD
+    // =========================================================================
+    function spawnParticles(x, y, color, count, maxSpd) {
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 30 + Math.random() * maxSpd;
+        const life = 0.2 + Math.random() * 0.26;
+        state.particles.push({
+          x,
+          y,
+          vx: Math.cos(a) * s,
+          vy: Math.sin(a) * s,
+          r: 2 + Math.random() * 3,
+          color,
+          life,
+          maxLife: life
+        });
+      }
+    }
+
+    function spawnFloatingText(x, y, text, color) {
+      state.floatingTexts.push({
+        x,
+        y,
+        text,
+        color,
+        life: 0.75,
+        maxLife: 0.75
+      });
+    }
+
+    function getAllParticipantsSorted() {
+      const list = [
+        {
+          id: state.myId,
+          name: state.myName,
+          tier: state.me.tier,
+          kills: state.me.kills,
+          isMe: true
+        }
+      ];
+
+      for (const rp of state.remotePlayers.values()) {
+        list.push({
+          id: rp.id,
+          name: rp.name,
+          tier: rp.tier,
+          kills: rp.kills,
+          isMe: false
+        });
+      }
+
+      for (const bot of state.bots) {
+        list.push({
+          id: bot.id,
+          name: `${bot.name} [ИИ]`,
+          tier: bot.tier,
+          kills: bot.kills,
+          isMe: false
+        });
+      }
+
+      list.sort((a, b) => b.tier - a.tier || b.kills - a.kills);
+      return list;
+    }
+
+    function updateHUD() {
+      const hpPct = Math.max(0, Math.min(100, state.me.hp));
+      ui.hudHpText.textContent = Math.ceil(hpPct);
+      ui.hudHpBar.style.width = `${hpPct}%`;
+
+      ui.hudRoomCode.textContent = state.roomCode;
+      ui.hudOnlineCount.textContent = 1 + state.remotePlayers.size;
+
+      if (state.me.streak >= 2) {
+        ui.hudStreak.classList.remove("hidden");
+        ui.hudStreakVal.textContent = state.me.streak;
+      } else {
+        ui.hudStreak.classList.add("hidden");
+      }
+
+      const w = WEAPONS[state.me.tier] || WEAPONS[0];
+      ui.hudTierNum.textContent = state.me.tier + 1;
+      ui.hudTierMax.textContent = WEAPONS.length;
+      ui.hudWeaponName.textContent = w.name;
+      ui.hudWeaponName.style.color = w.color;
+      ui.hudTierBar.style.width = `${((state.me.tier + 1) / WEAPONS.length) * 100}%`;
+
+      if (state.me.tier === WEAPONS.length - 1) {
+        ui.hudTierHint.textContent = "ФИНАЛ! Добейте врага ножом!";
+        ui.hudTierHint.className = "text-[10px] text-amber-300 mt-1 font-extrabold truncate max-w-full";
+      } else {
+        const nextW = WEAPONS[state.me.tier + 1];
+        ui.hudTierHint.textContent = `Далее: ${nextW.name}`;
+        ui.hudTierHint.className = "text-[10px] text-slate-400 mt-1 font-semibold truncate max-w-full";
+      }
+
+      // Обновление мини-лидерборда
+      const sorted = getAllParticipantsSorted().slice(0, 5);
+      ui.leaderboardList.innerHTML = "";
+      for (const item of sorted) {
+        const row = document.createElement("div");
+        row.className = `flex items-center justify-between gap-1 px-1.5 py-0.5 rounded ${
+          item.isMe ? "bg-cyan-500/20 text-cyan-200 font-extrabold" : "text-slate-300 font-semibold"
+        }`;
+        row.innerHTML = `<span class="truncate">${escapeHtml(item.name)}</span><span class="text-amber-300 font-black shrink-0">${item.tier + 1}/8</span>`;
+        ui.leaderboardList.appendChild(row);
+      }
+    }
+
+    // =========================================================================
+    // 12. УПРАВЛЕНИЕ (ТАЧ-ДЖОЙСТИКИ + КЛАВИАТУРА/МЫШЬ)
+    // =========================================================================
+    const STICK_RADIUS = 45;
+
+    function clearTouchControls() {
+      state.moveTouchId = null;
+      state.moveVec = { x: 0, y: 0 };
+      ui.moveBase.classList.add("hidden");
+      ui.moveKnob.classList.add("hidden");
+
+      state.aimTouchId = null;
+      state.aimActive = false;
+      ui.aimBase.classList.add("hidden");
+      ui.aimKnob.classList.add("hidden");
+    }
+
+    function positionStick(baseEl, knobEl, ox, oy, dx, dy) {
+      const dist = Math.hypot(dx, dy);
+      const clamped = Math.min(STICK_RADIUS, dist);
+      const ang = dist > 0.001 ? Math.atan2(dy, dx) : 0;
+      baseEl.style.left = `${ox}px`;
+      baseEl.style.top = `${oy}px`;
+      knobEl.style.left = `${ox + Math.cos(ang) * clamped}px`;
+      knobEl.style.top = `${oy + Math.sin(ang) * clamped}px`;
+    }
+
+    canvas.addEventListener(
+      "touchstart",
+      (e) => {
+        if (state.screen !== "playing") return;
+        e.preventDefault();
+        sound.ensure();
+        if (!state.hintsDismissed) {
+          state.hintsDismissed = true;
+          ui.touchHints.classList.add("hidden");
+        }
+
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.clientX < state.width * 0.5 && state.moveTouchId === null) {
+            state.moveTouchId = t.identifier;
+            state.moveOrigin = { x: t.clientX, y: t.clientY };
+            state.moveVec = { x: 0, y: 0 };
+            ui.moveBase.classList.remove("hidden");
+            ui.moveKnob.classList.remove("hidden");
+            positionStick(ui.moveBase, ui.moveKnob, t.clientX, t.clientY, 0, 0);
+          } else if (state.aimTouchId === null) {
+            state.aimTouchId = t.identifier;
+            state.aimOrigin = { x: t.clientX, y: t.clientY };
+            state.aimActive = true;
+            ui.aimBase.classList.remove("hidden");
+            ui.aimKnob.classList.remove("hidden");
+            positionStick(ui.aimBase, ui.aimKnob, t.clientX, t.clientY, 0, 0);
+          }
+        }
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      "touchmove",
+      (e) => {
+        if (state.screen !== "playing") return;
+        e.preventDefault();
+
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === state.moveTouchId) {
+            const dx = t.clientX - state.moveOrigin.x;
+            const dy = t.clientY - state.moveOrigin.y;
+            const dist = Math.hypot(dx, dy);
+            const norm = dist > 6 ? Math.min(1, dist / STICK_RADIUS) : 0;
+            const ang = Math.atan2(dy, dx);
+            state.moveVec.x = Math.cos(ang) * norm;
+            state.moveVec.y = Math.sin(ang) * norm;
+            positionStick(ui.moveBase, ui.moveKnob, state.moveOrigin.x, state.moveOrigin.y, dx, dy);
+          } else if (t.identifier === state.aimTouchId) {
+            const dx = t.clientX - state.aimOrigin.x;
+            const dy = t.clientY - state.aimOrigin.y;
+            positionStick(ui.aimBase, ui.aimKnob, state.aimOrigin.x, state.aimOrigin.y, dx, dy);
+            if (Math.hypot(dx, dy) > 6) {
+              state.me.angle = Math.atan2(dy, dx);
+            }
+            state.aimActive = true;
+          }
+        }
+      },
+      { passive: false }
+    );
+
+    function onTouchEnd(e) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === state.moveTouchId) {
+          state.moveTouchId = null;
+          state.moveVec = { x: 0, y: 0 };
+          ui.moveBase.classList.add("hidden");
+          ui.moveKnob.classList.add("hidden");
+        } else if (t.identifier === state.aimTouchId) {
+          state.aimTouchId = null;
+          state.aimActive = false;
+          ui.aimBase.classList.add("hidden");
+          ui.aimKnob.classList.add("hidden");
+        }
+      }
+    }
+
+    canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+    canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+    window.addEventListener("keydown", (e) => {
+      state.keys.add(e.code);
+    });
+    window.addEventListener("keyup", (e) => {
+      state.keys.delete(e.code);
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      state.mouseScreen.x = e.clientX - rect.left;
+      state.mouseScreen.y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (state.screen !== "playing" || e.button !== 0) return;
+      sound.ensure();
+      state.mouseDown = true;
+    });
+
+    window.addEventListener("mouseup", () => {
+      state.mouseDown = false;
+    });
+
+    // =========================================================================
+    // 13. СИМУЛЯЦИЯ КАДРА
+    // =========================================================================
+    function getCameraOffset() {
+      const camX = Math.max(0, Math.min(Math.max(0, WORLD_W - state.width), state.me.x - state.width * 0.5));
+      const camY = Math.max(0, Math.min(Math.max(0, WORLD_H - state.height), state.me.y - state.height * 0.5));
+      // Если экран шире арены — центрируем арену
+      const offsetX = state.width > WORLD_W ? (state.width - WORLD_W) * 0.5 : -camX;
+      const offsetY = state.height > WORLD_H ? (state.height - WORLD_H) * 0.5 : -camY;
+      return { offsetX, offsetY };
+    }
+
+    function updateSimulation(dt) {
+      if (state.screenShake > 0) {
+        state.screenShake = Math.max(0, state.screenShake - dt * 26);
+      }
+
+      if (state.me.invuln > 0) {
+        state.me.invuln = Math.max(0, state.me.invuln - dt);
+      }
+
+      if (state.me.meleeSwing > 0) {
+        state.me.meleeSwing = Math.max(0, state.me.meleeSwing - dt);
+      }
+
+      // Движение игрока
+      let mx = state.moveVec.x;
+      let my = state.moveVec.y;
+      let kx = 0;
+      let ky = 0;
+      if (state.keys.has("KeyA") || state.keys.has("ArrowLeft")) kx -= 1;
+      if (state.keys.has("KeyD") || state.keys.has("ArrowRight")) kx += 1;
+      if (state.keys.has("KeyW") || state.keys.has("ArrowUp")) ky -= 1;
+      if (state.keys.has("KeyS") || state.keys.has("ArrowDown")) ky += 1;
+      if (kx !== 0 || ky !== 0) {
+        const len = Math.hypot(kx, ky);
+        mx = kx / len;
+        my = ky / len;
+      }
+
+      state.me.x += mx * state.me.speed * dt;
+      state.me.y += my * state.me.speed * dt;
+      resolveCircleObstacles(state.me);
+
+      // Прицеливание мышью (если не активен правый тач-джойстик)
+      if (state.aimTouchId === null && (state.mouseDown || state.autoFire || kx !== 0 || ky !== 0 || !("ontouchstart" in window))) {
+        if (!("ontouchstart" in window) || state.mouseDown) {
+          const { offsetX, offsetY } = getCameraOffset();
+          const worldMouseX = state.mouseScreen.x - offsetX;
+          const worldMouseY = state.mouseScreen.y - offsetY;
+          state.me.angle = Math.atan2(worldMouseY - state.me.y, worldMouseX - state.me.x);
+        }
+      }
+
+      // Стрельба игрока
+      state.me.fireCooldown = Math.max(0, state.me.fireCooldown - dt);
+      const wantsShoot = state.aimActive || state.mouseDown || state.autoFire || state.keys.has("Space");
+      if (wantsShoot && state.me.fireCooldown <= 0) {
+        const w = WEAPONS[state.me.tier] || WEAPONS[0];
+        spawnWeaponProjectiles(state.me.x, state.me.y, state.me.angle, state.me.tier, state.myId, state.myName, true);
+        sound.playWeapon(state.me.tier);
+        state.me.fireCooldown = w.fireRate;
+        if (w.melee) state.me.meleeSwing = 0.22;
+
+        publishEvent({
+          type: "shoot",
+          senderName: state.myName,
+          x: Math.round(state.me.x),
+          y: Math.round(state.me.y),
+          angle: Number(state.me.angle.toFixed(2)),
+          tier: state.me.tier
+        });
+      }
+
+      // Плавная интерполяция удалённых игроков
+      for (const rp of state.remotePlayers.values()) {
+        rp.x += (rp.targetX - rp.x) * Math.min(1, dt * 14);
+        rp.y += (rp.targetY - rp.y) * Math.min(1, dt * 14);
+        rp.angle = rp.targetAngle;
+        if (rp.hitFlash > 0) rp.hitFlash = Math.max(0, rp.hitFlash - dt);
+      }
+
+      // Обновление ИИ-ботов
+      updateBots(dt);
+
+      // Обновление снарядов
+      for (let i = state.bullets.length - 1; i >= 0; i--) {
+        const b = state.bullets[i];
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.life -= dt;
+
+        // Границы арены
+        if (b.x < 0 || b.x > WORLD_W || b.y < 0 || b.y > WORLD_H || b.life <= 0) {
+          if (b.explosive > 0 && b.life > 0) {
+            triggerExplosion(b.x, b.y, b.explosive, b.damage, b.ownerId, b.ownerName, b.tier);
+          }
+          state.bullets.splice(i, 1);
+          continue;
+        }
+
+        // Столкновение со стенами
+        let hitWall = false;
+        for (const obs of OBSTACLES) {
+          if (circleRectCollide(b.x, b.y, b.radius, obs)) {
+            hitWall = true;
+            break;
+          }
+        }
+        if (hitWall) {
+          spawnParticles(b.x, b.y, b.color, 6, 120);
+          if (b.explosive > 0) {
+            triggerExplosion(b.x, b.y, b.explosive, b.damage, b.ownerId, b.ownerName, b.tier);
+          }
+          state.bullets.splice(i, 1);
+          continue;
+        }
+
+        // Проверка попаданий по участникам
+        let consumed = false;
+
+        // 1. Попадание по нашему игроку (от ботов; от онлайн-игроков урон приходит через событие 'hit')
+        if (b.canDealDamage && b.ownerId !== state.myId && !b.hitTargets.has(state.myId)) {
+          if (Math.hypot(b.x - state.me.x, b.y - state.me.y) < b.radius + state.me.radius) {
+            b.hitTargets.add(state.myId);
+            if (b.explosive > 0) {
+              triggerExplosion(b.x, b.y, b.explosive, b.damage, b.ownerId, b.ownerName, b.tier);
+              consumed = true;
+            } else {
+              applyDamageToMe(b.damage, b.ownerId, b.ownerName, b.tier);
+              if (b.pierce > 0) b.pierce -= 1;
+              else consumed = true;
+            }
+          }
+        }
+
+        // 2. Попадание по удалённым онлайн-игрокам
+        if (!consumed && b.canDealDamage && b.ownerId === state.myId) {
+          for (const rp of state.remotePlayers.values()) {
+            if (b.hitTargets.has(rp.id)) continue;
+            if (Math.hypot(b.x - rp.x, b.y - rp.y) < b.radius + rp.radius) {
+              b.hitTargets.add(rp.id);
+              spawnParticles(b.x, b.y, b.color, 6, 140);
+              if (b.explosive > 0) {
+                triggerExplosion(b.x, b.y, b.explosive, b.damage, b.ownerId, b.ownerName, b.tier);
+                consumed = true;
+                break;
+              } else {
+                handleAttackerScoredHit(b.ownerId, b.ownerName, rp.id, rp.name, b.damage, b.tier, rp);
+                if (b.pierce > 0) b.pierce -= 1;
+                else {
+                  consumed = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // 3. Попадание по ИИ-ботам
+        if (!consumed && b.canDealDamage) {
+          for (const bot of state.bots) {
+            if (bot.id === b.ownerId || b.hitTargets.has(bot.id)) continue;
+            if (Math.hypot(b.x - bot.x, b.y - bot.y) < b.radius + bot.radius) {
+              b.hitTargets.add(bot.id);
+              spawnParticles(b.x, b.y, b.color, 6, 140);
+              if (b.explosive > 0) {
+                triggerExplosion(b.x, b.y, b.explosive, b.damage, b.ownerId, b.ownerName, b.tier);
+                consumed = true;
+                break;
+              } else {
+                handleAttackerScoredHit(b.ownerId, b.ownerName, bot.id, bot.name, b.damage, b.tier, bot);
+                if (b.pierce > 0) b.pierce -= 1;
+                else {
+                  consumed = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (consumed) {
+          state.bullets.splice(i, 1);
+        }
+      }
+
+      // Частицы и всплывающий текст
+      for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.94;
+        p.vy *= 0.94;
+        p.life -= dt;
+        if (p.life <= 0) state.particles.splice(i, 1);
+      }
+
+      for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+        const ft = state.floatingTexts[i];
+        ft.y -= 38 * dt;
+        ft.life -= dt;
+        if (ft.life <= 0) state.floatingTexts.splice(i, 1);
+      }
+
+      // Периодическая синхронизация позиции с облаком (~12 раз/сек)
+      state.syncTimer += dt;
+      if (state.syncTimer >= 0.085) {
+        state.syncTimer = 0;
+        syncMyStateToCloud();
+      }
+    }
+
+    // =========================================================================
+    // 14. ОТРИСОВКА КИБЕР-АРЕНЫ
+    // =========================================================================
+    function drawFighter(fighter, isMe, isBot) {
+      const weapon = WEAPONS[fighter.tier] || WEAPONS[0];
+      const blink = isMe && state.me.invuln > 0 && Math.floor(state.me.invuln * 18) % 2 === 0;
+      if (blink) return;
+
+      ctx.save();
+      ctx.translate(fighter.x, fighter.y);
+
+      // Тень
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.beginPath();
+      ctx.arc(3, 5, fighter.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Оружие или дуга Золотого Ножа
+      ctx.save();
+      ctx.rotate(fighter.angle);
+      if (weapon.melee) {
+        // Золотой клинок
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath();
+        ctx.moveTo(12, -4);
+        ctx.lineTo(34, 0);
+        ctx.lineTo(12, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        if (fighter.meleeSwing > 0) {
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.7)";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(10, 0, 34, -0.9, 0.9);
+          ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = weapon.color;
+        ctx.beginPath();
+        ctx.roundRect(6, -4.5, fighter.radius + 10, 9, 4);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Корпус бойца
+      ctx.fillStyle = fighter.hitFlash > 0 ? "#ffffff" : isMe ? "#0284c7" : isBot ? "#dc2626" : "#7c3aed";
+      ctx.strokeStyle = isMe ? "#e0f2fe" : isBot ? "#fecaca" : "#ddd6fe";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, fighter.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Индикатор ранга в центре
+      ctx.fillStyle = weapon.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Имя и полоска здоровья над головой
+      const label = isBot ? `${fighter.name} [ИИ]` : fighter.name;
+      ctx.font = "800 12px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#060913";
+      ctx.fillText(label, 1, -fighter.radius - 15);
+      ctx.fillStyle = isMe ? "#38bdf8" : "#f8fafc";
+      ctx.fillText(label, 0, -fighter.radius - 16);
+
+      const barW = 42;
+      const barH = 4.5;
+      const hpPct = Math.max(0, Math.min(1, (fighter.hp ?? 100) / 100));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      ctx.fillRect(-barW * 0.5, -fighter.radius - 11, barW, barH);
+      ctx.fillStyle = isMe ? "#34d399" : "#fb7185";
+      ctx.fillRect(-barW * 0.5, -fighter.radius - 11, barW * hpPct, barH);
+
+      ctx.restore();
+    }
+
+    function renderScene() {
+      ctx.clearRect(0, 0, state.width, state.height);
+
+      ctx.save();
+      if (state.screenShake > 0.2) {
+        ctx.translate((Math.random() - 0.5) * state.screenShake, (Math.random() - 0.5) * state.screenShake);
+      }
+
+      const { offsetX, offsetY } = getCameraOffset();
+      ctx.translate(offsetX, offsetY);
+
+      // Пол арены и тактическая сетка
+      ctx.fillStyle = "#0b1120";
+      ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.06)";
+      ctx.lineWidth = 1;
+      const grid = 64;
+      ctx.beginPath();
+      for (let x = 0; x <= WORLD_W; x += grid) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, WORLD_H);
+      }
+      for (let y = 0; y <= WORLD_H; y += grid) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(WORLD_W, y);
+      }
+      ctx.stroke();
+
+      // Периметр арены
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, WORLD_W - 4, WORLD_H - 4);
+
+      // Центральная зона
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.14)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(WORLD_W * 0.5, WORLD_H * 0.5, 190, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Препятствия / укрытия
+      for (const obs of OBSTACLES) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+        ctx.fillRect(obs.x + 6, obs.y + 8, obs.w, obs.h);
+
+        ctx.fillStyle = obs.color;
+        ctx.strokeStyle = obs.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(obs.x, obs.y, obs.w, obs.h, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Снаряды
+      for (const b of state.bullets) {
+        ctx.save();
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Боты
+      for (const bot of state.bots) {
+        drawFighter(bot, false, true);
+      }
+
+      // Онлайн-игроки
+      for (const rp of state.remotePlayers.values()) {
+        drawFighter(rp, false, false);
+      }
+
+      // Наш игрок
+      if (state.screen === "playing" || state.screen === "victory") {
+        drawFighter({ ...state.me, name: state.myName }, true, false);
+      }
+
+      // Частицы
+      for (const p of state.particles) {
+        const a = Math.max(0, p.life / p.maxLife);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * a + 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Всплывающие цифры урона
+      for (const ft of state.floatingTexts) {
+        const a = Math.max(0, ft.life / ft.maxLife);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.font = "900 14px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#060913";
+        ctx.fillText(ft.text, ft.x + 1, ft.y + 1);
+        ctx.fillStyle = ft.color;
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // 15. ЗАПУСК / ПЕРЕЗАПУСК МАТЧА И АДАПТИВНЫЙ CANVAS
+    // =========================================================================
+    function resizeCanvas() {
+      const rect = document.getElementById("app-shell").getBoundingClientRect();
+      state.width = Math.max(320, rect.width);
+      state.height = Math.max(460, rect.height);
+      state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      canvas.width = Math.floor(state.width * state.dpr);
+      canvas.height = Math.floor(state.height * state.dpr);
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    async function joinMatch() {
+      sound.ensure();
+      const rawNick = ui.inputNickname.value.trim();
+      state.myName = rawNick || `Боец_${Math.floor(10 + Math.random() * 89)}`;
+      saveNick(state.myName);
+
+      const rawRoom = ui.inputRoom.value.trim().toUpperCase().replace(/[^A-ZА-Я0-9_-]/g, "");
+      state.roomCode = rawRoom || "ARENA-1";
+      ui.inputRoom.value = state.roomCode;
+
+      if (firebaseReady && currentUser) {
+        state.myId = currentUser.uid;
+      }
+
+      state.sessionStartMs = Date.now();
+      state.processedEventIds.clear();
+      state.bullets = [];
+      state.particles = [];
+      state.floatingTexts = [];
+      state.killfeed = [];
+      renderKillfeed();
+
+      const sp = pickSafeSpawn();
+      state.me.x = sp.x;
+      state.me.y = sp.y;
+      state.me.hp = 100;
+      state.me.tier = 0;
+      state.me.kills = 0;
+      state.me.deaths = 0;
+      state.me.streak = 0;
+      state.me.invuln = 1.5;
+
+      state.screen = "playing";
+      ui.lobbyScreen.classList.add("hidden");
+      ui.victoryScreen.classList.add("hidden");
+      ui.hudTop.classList.remove("hidden");
+      if (!state.hintsDismissed) {
+        ui.touchHints.classList.remove("hidden");
+      }
+
+      rebalanceBots();
+      subscribeToRoom();
+      await syncMyStateToCloud(true);
+      updateHUD();
+      showToast("БОЙ НАЧАЛСЯ", `Комната: ${state.roomCode}`);
+    }
+
+    async function leaveToLobby() {
+      cleanupRoomSubscriptions();
+      await removeMyPlayerDoc();
+      clearTouchControls();
+      state.remotePlayers.clear();
+      state.bots = [];
+      state.screen = "lobby";
+      ui.hudTop.classList.add("hidden");
+      ui.touchHints.classList.add("hidden");
+      ui.victoryScreen.classList.add("hidden");
+      ui.lobbyScreen.classList.remove("hidden");
+    }
+
+    function gameLoop(ts) {
+      if (!state.lastTime) state.lastTime = ts;
+      const dt = Math.min(0.05, Math.max(0, (ts - state.lastTime) / 1000));
+      state.lastTime = ts;
+
+      if (state.screen === "playing") {
+        updateSimulation(dt);
+      }
+      renderScene();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Привязка кнопок интерфейса
+    ui.btnPlay.addEventListener("click", joinMatch);
+    ui.btnRematch.addEventListener("click", joinMatch);
+    ui.btnVictoryLobby.addEventListener("click", leaveToLobby);
+    ui.btnLeave.addEventListener("click", leaveToLobby);
+
+    ui.btnRandomRoom.addEventListener("click", () => {
+      const code = "ARENA-" + Math.floor(10 + Math.random() * 89);
+      ui.inputRoom.value = code;
+    });
+
+    ui.btnCopyRoom.addEventListener("click", () => {
+      const temp = document.createElement("textarea");
+      temp.value = state.roomCode;
+      document.body.appendChild(temp);
+      temp.select();
+      try {
+        document.execCommand("copy");
+        showToast("СКОПИРОВАНО", `Код комнаты: ${state.roomCode}`);
+      } catch (_) {}
+      document.body.removeChild(temp);
+    });
+
+    ui.btnAutofire.addEventListener("click", () => {
+      state.autoFire = !state.autoFire;
+      ui.autofireLabel.textContent = state.autoFire ? "ВКЛ" : "ВЫКЛ";
+      ui.autofireLabel.className = state.autoFire ? "text-emerald-400" : "text-slate-400";
+    });
+
+    function syncSoundIcons() {
+      ui.iconSoundOn.classList.toggle("hidden", sound.muted);
+      ui.iconSoundOff.classList.toggle("hidden", !sound.muted);
+    }
+
+    ui.btnMute.addEventListener("click", () => {
+      sound.setMuted(!sound.muted);
+      syncSoundIcons();
+      if (!sound.muted) sound.ensure();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      removeMyPlayerDoc();
+    });
+
+    window.addEventListener("load", () => {
+      syncSoundIcons();
+      resizeCanvas();
+      rebalanceBots();
+      state.lastTime = performance.now();
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
+</body>
+</html>
